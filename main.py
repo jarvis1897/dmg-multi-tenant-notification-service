@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.channel_configs.router import router as channel_configs_router
 from app.common.auth_router import router as auth_router
 from app.common.database import AsyncSessionLocal
+from app.notifications.router import router as notifications_router
 from app.recipients.router import router as recipients_router
 from app.templates.router import router as templates_router
 from app.tenants.router import router as tenants_router
@@ -43,6 +44,7 @@ app.include_router(users_router)
 app.include_router(templates_router)
 app.include_router(recipients_router)
 app.include_router(channel_configs_router)
+app.include_router(notifications_router)
 
 
 @app.get("/health", tags=["meta"])
