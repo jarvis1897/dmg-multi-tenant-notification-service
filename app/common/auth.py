@@ -63,3 +63,16 @@ async def require_tenant_admin(current_user=Depends(get_current_user)):
     if current_user.role not in (UserRole.PLATFORM_ADMIN, UserRole.TENANT_ADMIN):
         raise ForbiddenError("Tenant admin access required")
     return current_user
+
+
+async def get_current_tenant_id(current_user=Depends(require_tenant_admin)) -> str:
+    """
+    Tenant scope for self-service routes (templates, recipients,
+    channel-configs) — always derived from the caller's own JWT, never
+    from a path/query/body param. Platform admins have no tenant_id of
+    their own, so they are rejected here even though require_tenant_admin
+    lets their role through.
+    """
+    if current_user.tenant_id is None:
+        raise ForbiddenError("This action requires a tenant-scoped account")
+    return current_user.tenant_id

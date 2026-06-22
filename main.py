@@ -4,8 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy import text
 
+from app.channel_configs.router import router as channel_configs_router
 from app.common.auth_router import router as auth_router
 from app.common.database import AsyncSessionLocal
+from app.recipients.router import router as recipients_router
+from app.templates.router import router as templates_router
 from app.tenants.router import router as tenants_router
 from app.users.router import router as users_router
 
@@ -37,6 +40,9 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(tenants_router)
 app.include_router(users_router)
+app.include_router(templates_router)
+app.include_router(recipients_router)
+app.include_router(channel_configs_router)
 
 
 @app.get("/health", tags=["meta"])

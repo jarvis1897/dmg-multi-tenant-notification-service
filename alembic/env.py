@@ -15,6 +15,7 @@ import app.templates.models  # noqa: F401
 import app.notifications.models  # noqa: F401
 import app.delivery.models  # noqa: F401
 import app.recipients.models  # noqa: F401
+import app.channel_configs.models  # noqa: F401
 
 config = context.config
 

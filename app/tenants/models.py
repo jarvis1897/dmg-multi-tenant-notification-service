@@ -9,6 +9,7 @@ from app.common.database import Base
 from app.common.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.channel_configs.models import ChannelConfig
     from app.notifications.models import NotificationRequest
     from app.recipients.models import Recipient
     from app.templates.models import Template
@@ -37,3 +38,6 @@ class Tenant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         "NotificationRequest", back_populates="tenant", lazy="noload"
     )
     recipients: Mapped[list[Recipient]] = relationship("Recipient", back_populates="tenant", lazy="noload")
+    channel_configs: Mapped[list[ChannelConfig]] = relationship(
+        "ChannelConfig", back_populates="tenant", lazy="noload"
+    )
