@@ -10,6 +10,7 @@ from alembic import context
 # Import Base and all models so Alembic can see them for autogenerate
 from app.common.database import Base  # noqa: F401
 import app.tenants.models  # noqa: F401
+import app.users.models  # noqa: F401
 import app.templates.models  # noqa: F401
 import app.notifications.models  # noqa: F401
 import app.delivery.models  # noqa: F401

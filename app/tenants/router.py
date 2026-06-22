@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import require_platform_admin
 from app.common.database import get_db
-from app.tenants.schemas import TenantCreate, TenantCreateOut, TenantOut, TenantUpdate, UserCreate, UserOut
+from app.tenants.schemas import TenantCreate, TenantCreateOut, TenantOut, TenantUpdate
 from app.tenants.service import TenantService
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
@@ -48,24 +48,3 @@ async def update_tenant(
     _=Depends(require_platform_admin),
 ):
     return await svc.update(tenant_id, body)
-
-
-# --- Tenant user management (platform admin only) ---
-
-@router.post("/{tenant_id}/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def create_tenant_user(
-    tenant_id: str,
-    body: UserCreate,
-    svc: TenantService = Depends(_svc),
-    _=Depends(require_platform_admin),
-):
-    return await svc.create_tenant_user(tenant_id, body)
-
-
-@router.get("/{tenant_id}/users", response_model=list[UserOut])
-async def list_tenant_users(
-    tenant_id: str,
-    svc: TenantService = Depends(_svc),
-    _=Depends(require_platform_admin),
-):
-    return await svc.list_tenant_users(tenant_id)

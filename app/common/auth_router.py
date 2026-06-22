@@ -27,7 +27,7 @@ async def login(
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.tenants.models import User
+    from app.users.models import User
 
     result = await db.execute(
         select(User).where(User.email == form.username, User.is_active.is_(True))
@@ -48,7 +48,7 @@ async def bootstrap_platform_admin(
     One-time bootstrap endpoint: creates the first platform admin.
     Returns 403 once any platform admin exists.
     """
-    from app.tenants.models import User
+    from app.users.models import User
 
     existing = await db.execute(
         select(User).where(User.role == UserRole.PLATFORM_ADMIN)

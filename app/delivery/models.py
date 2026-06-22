@@ -12,25 +12,35 @@ from app.common.enums import DeliveryStatus
 from app.common.mixins import TimestampMixin, UUIDPrimaryKeyMixin, _now_utc
 
 if TYPE_CHECKING:
-    from app.notifications.models import Notification
+    from app.notifications.models import NotificationChannel
 
 
 class DeliveryAttempt(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """
-    One unit of work: delivering a Notification to a single recipient on a
-    single channel.  Claimed atomically via UPDATE…WHERE status='PENDING'
-    to avoid duplicate dispatch on retry races.
+    One unit of work: delivering a single NotificationChannel's rendered
+    content to a single recipient.  Claimed atomically via
+    UPDATE…WHERE status='PENDING' to avoid duplicate dispatch on retry races.
     """
 
     __tablename__ = "delivery_attempts"
 
-    # Denormalized tenant_id so every query can be scoped without a join
-    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    notification_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False, index=True
+    notification_channel_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("notification_channels.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
+    # Denormalized tenant_id/channel so every query can be scoped/filtered
+    # without a join back through notification_channels.
+    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
-    recipient: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    recipient_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("recipients.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # Resolved RecipientChannelAddress.address snapshot taken at fan-out
+    # time — stays correct even if the recipient's address changes later.
+    address: Mapped[str] = mapped_column(String(500), nullable=False)
 
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, default=DeliveryStatus.CREATED.value, index=True
@@ -52,8 +62,8 @@ class DeliveryAttempt(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    notification: Mapped[Notification] = relationship(
-        "Notification", back_populates="delivery_attempts", lazy="noload"
+    notification_channel: Mapped[NotificationChannel] = relationship(
+        "NotificationChannel", back_populates="delivery_attempts", lazy="noload"
     )
 
 

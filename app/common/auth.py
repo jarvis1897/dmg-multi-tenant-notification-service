@@ -33,8 +33,8 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ):
-    # Import here to avoid circular import (auth ↔ tenants/models)
-    from app.tenants.models import User
+    # Import here to avoid circular import (auth ↔ users/models)
+    from app.users.models import User
 
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])

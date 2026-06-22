@@ -1,16 +1,18 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.common.database import Base
 from app.common.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from app.notifications.models import Notification
+    from app.notifications.models import NotificationRequest
     from app.recipients.models import Recipient
     from app.templates.models import Template
-    from app.tenants.models import User
+    from app.users.models import User
 
 
 class Tenant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -29,31 +31,9 @@ class Tenant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     rate_limit_push: Mapped[int] = mapped_column(Integer, nullable=False, default=200)
     rate_limit_in_app: Mapped[int] = mapped_column(Integer, nullable=False, default=500)
 
-    users: Mapped[list["User"]] = relationship("User", back_populates="tenant", lazy="noload")
-    templates: Mapped[list["Template"]] = relationship("Template", back_populates="tenant", lazy="noload")
-    notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="tenant", lazy="noload")
-    recipients: Mapped[list["Recipient"]] = relationship("Recipient", back_populates="tenant", lazy="noload")
-
-
-class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
-    __tablename__ = "users"
-
-    # NULL tenant_id = platform admin (not scoped to any tenant)
-    tenant_id: Mapped[str | None] = mapped_column(
-        String(36),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=True,
-        index=True,
+    users: Mapped[list[User]] = relationship("User", back_populates="tenant", lazy="noload")
+    templates: Mapped[list[Template]] = relationship("Template", back_populates="tenant", lazy="noload")
+    notification_requests: Mapped[list[NotificationRequest]] = relationship(
+        "NotificationRequest", back_populates="tenant", lazy="noload"
     )
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(50), nullable=False)  # UserRole enum value
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-
-    tenant: Mapped["Tenant | None"] = relationship(
-        "Tenant",
-        back_populates="users",
-        foreign_keys=[tenant_id],
-        primaryjoin="User.tenant_id == Tenant.id",
-        lazy="noload",
-    )
+    recipients: Mapped[list[Recipient]] = relationship("Recipient", back_populates="tenant", lazy="noload")

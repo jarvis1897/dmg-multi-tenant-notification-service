@@ -1,6 +1,7 @@
 # Multi-tenant Notification Service — Project Memory
 
 ## Project Overview
+
 FastAPI service supporting multi-tenant notification dispatch across
 email/SMS/push/in-app channels, with templates, scheduling, per-tenant rate
 limiting, retries with backoff, and delivery tracking. Built for a 48-hour
@@ -8,13 +9,15 @@ take-home assessment. No distributed systems, no external queues. Single
 process, asyncio-based concurrency, persistence via SQLite.
 
 ## Stack & Conventions
+
 - Python 3.11+, FastAPI, Uvicorn (single worker, see Database Notes on why
   multiple processes would break SQLite write-claiming).
 - Fully async: SQLAlchemy 2.0 async ORM + `aiosqlite` driver. No sync DB calls
   anywhere in request/worker paths.
 - Migrations: Alembic.
-- Package layout: `app/{tenants,templates,notifications,delivery,common}/`,
-  each with `models.py`, `schemas.py` (Pydantic V2), `router.py`, `service.py`.
+- Package layout: `app/{tenants,users,templates,notifications,delivery,recipients,common}/`,
+  each with `models.py`, `schemas.py` (Pydantic V2), `router.py`, `service.py`. (users is separate from tenants because platform admins aren't
+  tenant-scoped — see User model's CHECK constraint.)
 - Dependency injection via FastAPI's `Depends()` — services take their
   dependencies (DB session, settings) as constructor args, wired through a
   provider function, not instantiated ad hoc inside route handlers.
@@ -25,6 +28,7 @@ process, asyncio-based concurrency, persistence via SQLite.
   one and apply consistently, don't mix naive and aware datetimes.
 
 ## Database Notes (SQLite-specific: read before writing dispatch logic)
+
 - Enable WAL mode (`PRAGMA journal_mode=WAL`) and a `busy_timeout` on every
   connection — SQLite allows concurrent readers but only one writer at a
   time; without WAL + busy_timeout, concurrent writers raise
@@ -40,9 +44,35 @@ process, asyncio-based concurrency, persistence via SQLite.
 - Run with a single Uvicorn worker process. Multiple processes against the
   same SQLite file multiply lock contention without adding real throughput.
 
+## Auth & RBAC (settled)
+
+- JWT issued from POST /login (email + password, bcrypt-hashed password
+  at rest). No OAuth/SSO/MFA — out of scope per PRD.
+- get_current_user dependency decodes the JWT and loads the User.
+  Separate require_platform_admin / require_tenant_admin dependencies
+  wrap it for route-level role checks — don't scatter if role == ...
+  checks inside route bodies.
+- A TENANT_ADMIN's tenant scope comes from their own User.tenant_id,
+  never from a request body/query param — don't let a tenant admin pass a
+  different tenant_id and act on it.
+
 ## Core Domain Decisions (do not re-derive these — they're settled)
-- `Notification` = the logical send request. `DeliveryAttempt` = one
-  per-channel, per-recipient unit of work, independently retried/tracked.
+
+- Three-level fan-out: `NotificationRequest` (the client's intent — template
+  - variables + recipient list + optional `scheduled_at`) → one
+    `NotificationChannel` per requested channel → one `DeliveryAttempt` per
+    recipient on that channel. This is what lets one API call mean "email AND
+    sms this group" while tracking each channel/recipient independently.
+- `Recipient` (tenant-scoped) + `RecipientChannelAddress` (one row per
+  channel a recipient is reachable on) replace raw address strings in the
+  request body. A `NotificationRequest` carries a list of `recipient_id`s,
+  not raw emails/phone numbers — same list reused across every requested
+  channel.
+- **Recipients without a registered address for a requested channel are
+  skipped for that channel only** (no `DeliveryAttempt` created for that
+  pair) rather than failing the whole request. Recorded in
+  `NotificationChannel.skipped_recipients` (JSON: `{recipient_id: reason}`).
+  This was an explicit PRD-scoping decision — document it in README.md.
 - Delivery state machine: CREATED → SCHEDULED → PENDING → SENDING →
   SENT | FAILED → RETRYING → DEAD_LETTERED. Every transition is written to
   `audit_log` (who/what/when/old_state/new_state).
@@ -58,13 +88,14 @@ process, asyncio-based concurrency, persistence via SQLite.
   round-robin dispatch — never a single shared queue with no tenant
   isolation.
 - Retry/backoff: exponential with jitter, `next_attempt_at` column, polled by
-a plain asyncio background task started at app startup —
-while True: await asyncio.sleep(POLL_INTERVAL_SECONDS), then query and
-dispatch due rows each tick. No APScheduler, no external message broker —
-this is the leanest option for a 48-hour scope and the easiest to test
-(just call the poll function directly in tests instead of sleeping).
+  a plain asyncio background task started at app startup —
+  while True: await asyncio.sleep(POLL_INTERVAL_SECONDS), then query and
+  dispatch due rows each tick. No APScheduler, no external message broker —
+  this is the leanest option for a 48-hour scope and the easiest to test
+  (just call the poll function directly in tests instead of sleeping).
 
 ## Testing
+
 - Unit tests for: token bucket math, backoff calculator, state machine
   transition validity, template variable substitution.
 - Integration tests (`pytest` + `pytest-asyncio` + `httpx.AsyncClient` against
@@ -79,6 +110,7 @@ this is the leanest option for a 48-hour scope and the easiest to test
   unit/integration with markers).
 
 ## Workflow Preferences
+
 - Before implementing anything non-trivial (new entity, new state machine
   transition, concurrency-sensitive code), propose the approach in 3-5
   bullets before writing code. Wait for go-ahead on anything touching the
@@ -91,10 +123,12 @@ this is the leanest option for a 48-hour scope and the easiest to test
   silently building it.
 
 ## Out of Scope (per assessment instructions — do not build)
+
 - UI/frontend, Docker/CI-CD, OAuth/SSO/MFA, distributed systems/microservices,
   production observability/alerting.
 
 ## Open Decisions
+
 - Push/SMS/email "send" calls: Providers: fully mock. Create a MockProvider class that uses asyncio.sleep(0.1) to simulate network latency and randomly fails 10% of the time to trigger the retry logic.
 - Webhook callback endpoint for async provider delivery confirmation: build
   if time allows after core flows are solid.

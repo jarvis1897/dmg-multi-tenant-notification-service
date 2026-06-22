@@ -4,10 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.auth import hash_password
-from app.common.enums import UserRole
 from app.common.exceptions import ConflictError, NotFoundError
-from app.tenants.models import Tenant, User
-from app.tenants.schemas import TenantCreate, TenantUpdate, UserCreate
+from app.tenants.models import Tenant
+from app.tenants.schemas import TenantCreate, TenantUpdate
 
 
 class TenantService:
@@ -59,29 +58,3 @@ class TenantService:
             setattr(tenant, field, value)
         await self.db.flush()
         return tenant
-
-    # --- Tenant user management ---
-
-    async def create_tenant_user(self, tenant_id: str, data: UserCreate) -> User:
-        await self.get_by_id(tenant_id)  # 404 if tenant doesn't exist
-
-        existing = await self.db.execute(select(User).where(User.email == data.email))
-        if existing.scalar_one_or_none() is not None:
-            raise ConflictError("A user with this email already exists")
-
-        user = User(
-            tenant_id=tenant_id,
-            email=data.email,
-            hashed_password=hash_password(data.password),
-            role=UserRole.TENANT_ADMIN,
-        )
-        self.db.add(user)
-        await self.db.flush()
-        return user
-
-    async def list_tenant_users(self, tenant_id: str) -> list[User]:
-        await self.get_by_id(tenant_id)
-        result = await self.db.execute(
-            select(User).where(User.tenant_id == tenant_id).order_by(User.created_at.desc())
-        )
-        return list(result.scalars().all())

@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.common.auth_router import router as auth_router
 from app.common.database import AsyncSessionLocal
 from app.tenants.router import router as tenants_router
+from app.users.router import router as users_router
 
 
 def _run_migrations() -> None:
@@ -35,6 +36,7 @@ app = FastAPI(
 
 app.include_router(auth_router)
 app.include_router(tenants_router)
+app.include_router(users_router)
 
 
 @app.get("/health", tags=["meta"])
