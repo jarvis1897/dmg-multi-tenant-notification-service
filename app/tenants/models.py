@@ -8,6 +8,7 @@ from app.common.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.notifications.models import Notification
+    from app.recipients.models import Recipient
     from app.templates.models import Template
     from app.tenants.models import User
 
@@ -31,6 +32,7 @@ class Tenant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     users: Mapped[list["User"]] = relationship("User", back_populates="tenant", lazy="noload")
     templates: Mapped[list["Template"]] = relationship("Template", back_populates="tenant", lazy="noload")
     notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="tenant", lazy="noload")
+    recipients: Mapped[list["Recipient"]] = relationship("Recipient", back_populates="tenant", lazy="noload")
 
 
 class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
