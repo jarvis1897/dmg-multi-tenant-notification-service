@@ -153,6 +153,76 @@ alembic upgrade head
 uvicorn main:app --reload
 ```
 
+## Quickstart — bootstrap, send, and watch a notification get delivered
+
+The database starts empty, and every route except the one-time bootstrap
+is auth-gated, so this is the fastest way from a fresh clone to seeing
+the whole system work. Run with the server up from the step above (every
+command below was actually run against a fresh DB to write this section).
+
+```bash
+BASE_URL="http://localhost:8000"
+
+# 1. Bootstrap the first platform admin (works once; 403s after that —
+#    use /auth/login instead once an admin exists).
+ADMIN_TOKEN=$(curl -s -X POST "$BASE_URL/auth/register/platform-admin" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@example.com", "password": "ChangeMe123!"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# 2. Create a tenant (the response includes a one-time-shown api_key,
+#    not used by anything in this walkthrough but not recoverable later).
+TENANT_ID=$(curl -s -X POST "$BASE_URL/tenants" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"name": "Acme Corp", "slug": "acme"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+
+# 3. Create a tenant admin for that tenant (only a platform admin can do this).
+curl -s -X POST "$BASE_URL/tenants/$TENANT_ID/users" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -d '{"email": "tadmin@acme.com", "password": "ChangeMe123!"}'
+
+# 4. Log in as the tenant admin -- everything from here on is tenant-scoped
+#    via this token, never via a tenant_id you pass yourself.
+TADMIN_TOKEN=$(curl -s -X POST "$BASE_URL/auth/login" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=tadmin@acme.com&password=ChangeMe123!" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# 5. Create an email template ({{variables}} get substituted at send time).
+curl -s -X POST "$BASE_URL/templates" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TADMIN_TOKEN" \
+  -d '{"name": "welcome", "channel": "email", "subject": "Welcome, {{first_name}}!", "body": "Hi {{first_name}}, thanks for signing up.", "variables": ["first_name"]}'
+
+# 6. Create a recipient with an email address.
+RECIPIENT_ID=$(curl -s -X POST "$BASE_URL/recipients" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TADMIN_TOKEN" \
+  -d '{"external_key": "user-1", "display_name": "Jane Doe", "addresses": [{"channel": "email", "address": "jane@example.com"}]}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+
+# 7. Send it. The response already shows delivery_attempt_count and
+#    rendered content; the dispatch engine picks the attempt up on its
+#    next poll tick (POLL_INTERVAL_SECONDS, default 3s).
+curl -s -X POST "$BASE_URL/notifications" \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $TADMIN_TOKEN" \
+  -d "{\"template_name\": \"welcome\", \"channels\": [\"email\"], \"recipient_ids\": [\"$RECIPIENT_ID\"], \"variables\": {\"first_name\": \"Jane\"}}"
+```
+
+There's no `GET /notifications/{id}` yet (see [API Overview](#api-overview)),
+so to actually watch it land, wait a few seconds and inspect the DB directly:
+
+```bash
+sqlite3 notifications.db \
+  "SELECT status, attempt_count FROM delivery_attempts; SELECT channel, status FROM notification_channels;"
+# -> SENT|0
+# -> email|COMPLETED
+```
+
+Or explore interactively at `http://localhost:8000/docs` — Swagger UI's
+"Authorize" button accepts the bearer tokens from steps 1/4 directly, and
+every route above (plus `/channel-configs`) is callable from there without
+writing any curl.
+
 ### Configuration (env vars, all optional with sane defaults)
 
 | Variable | Default | Purpose |
