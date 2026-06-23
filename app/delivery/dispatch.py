@@ -113,6 +113,15 @@ async def claim_and_send(
 
     attempt = await session.get(DeliveryAttempt, delivery_attempt_id)
     old_state = DeliveryStatus.PENDING.value if attempt.attempt_count == 0 else DeliveryStatus.RETRYING.value
+    # The claim above was a raw Core UPDATE, invisible to the ORM's change
+    # tracking. If this object was already in the session's identity map
+    # (e.g. a second claim_and_send call reusing the same session), its
+    # in-memory `status` is stale. Sync it explicitly so a later assignment
+    # of the *same* value (e.g. RETRYING -> RETRYING across two failures in
+    # a row) is still recognized as a real change and actually gets flushed
+    # — otherwise SQLAlchemy sees no net diff and silently omits the column
+    # from the next UPDATE, leaving the row stuck on SENDING forever.
+    attempt.status = DeliveryStatus.SENDING.value
     _write_audit(session, attempt.tenant_id, attempt.id, old_state, DeliveryStatus.SENDING.value)
     await session.commit()
 
