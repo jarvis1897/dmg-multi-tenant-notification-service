@@ -208,3 +208,6 @@ there with reasoning, not just outcomes.
 
 No custom Agent Skills were used; project context was managed entirely
 through CLAUDE.md.
+
+Raw development session transcripts are included under
+`docs/transcripts/` for reference.
