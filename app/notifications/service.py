@@ -2,6 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.common.config import settings
 from app.common.enums import Channel, DeliveryStatus, NotificationStatus
 from app.common.exceptions import ConflictError, NotFoundError, ValidationError
 from app.delivery.models import AuditLog, DeliveryAttempt
@@ -109,6 +110,7 @@ class NotificationService:
                         address=channel_addresses[recipient_id],
                         status=attempt_status.value,
                         next_attempt_at=data.scheduled_at,
+                        max_attempts=settings.max_attempts,
                     )
                 )
 
